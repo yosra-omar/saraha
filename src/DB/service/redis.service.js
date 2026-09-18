@@ -5,6 +5,10 @@ export const otpKey = async(email)=>{
    return `otp:${email}`
 }
 
+export const revokeTokenKey = async( userId ,tokenId)=>{
+   return `revokeTokenModelKey :${userId}, ${tokenId}`
+}
+
 export const max_otp_Key = async(email)=>{
    return `otp::${email}::max`
 }

@@ -1,11 +1,10 @@
 import mongoose from "mongoose"
-const URL_user="mongodb://localhost:27017/saraha"
-
-
+import { DB_URI_ONLINE } from "../../config/config.service.js";
+ 
 export const checkConnectionDB = async()=>{
     try {
-        await mongoose.connect(URL_user)
-        console.log("DB connect successfuly ");
+        await mongoose.connect(DB_URI_ONLINE)
+        console.log(` DB connect successfuly ${DB_URI_ONLINE} `);
     } catch (error) {
         console.log(error,"DB Failed connected");
     }

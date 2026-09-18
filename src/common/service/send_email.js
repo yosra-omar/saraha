@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { PASSWORD, USER_EMAIL } from "../../../config/config.service.js";
 
 export const sendEmail = async({
    to,
@@ -14,14 +15,14 @@ export const sendEmail = async({
         rejectUnauthorized: false
     },
   auth: {
-    user: "yosra.omar.7.3.2@gmail.com",
-    pass: "biekjhctbzhgnbiy",
+    user: USER_EMAIL,
+    pass: PASSWORD,
   },
 });
 
 try {
   const info = await transporter.sendMail({
-    from: '"yasoo" <yosra.omar.7.3.2@gmail.com>', 
+    from: `"yasoo" <${USER_EMAIL}>` ,
     to, 
     subject, 
     html, 

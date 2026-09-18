@@ -54,8 +54,7 @@ const userSchema = new mongoose.Schema({
     },
     isConfirmed:{
         type:Boolean,
-        default : false
-    },
+     },
     coverImages:[String],
     changeCredential : Date
 },{

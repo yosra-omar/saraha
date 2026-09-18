@@ -11,6 +11,9 @@ import { randomUUID } from "crypto";
 import { revokeTokenModel } from "../../DB/models/revokToken.model.js";
 import * as redis_service from "../../DB/service/redis.service.js";
 import { generate_otp, sendEmail } from "../../common/service/send_email.js";
+import { eventEmitter,event_names } from "../../common/utils/events/send_email.event.js";
+import { otpEmailTemplate } from "../../common/utils/email.templete.js";
+import { AUDIENCE, REFRESH_SECRETKEY, SECRETKEY } from "../../../config/config.service.js";
  //====================== this is old way in vertion 4 ==========
 // const asyncHandler = (fn)=>{
 //     return(req,res,next)=>{
@@ -20,8 +23,56 @@ import { generate_otp, sendEmail } from "../../common/service/send_email.js";
 //       })
 //     }
 // }
+const sentEmailOTP = async({email , confirmed })=>{
+     const isBlocked = await redis_service.ttl( await redis_service.block_otp_Key(email))
+      if(isBlocked > 0){
+          throw new Error (`you  blocked and you can resend OTP after ${isBlocked} seconds `,{cause:400})
+      }
 
+     const otpTTL = await redis_service.ttl(await redis_service.otpKey(email))
+     if(otpTTL >0){
+       throw new Error (`you can resend otp after ${otpTTL}`,{cause:400})
+     }
+     
+     const maxOtp = await redis_service.getValue(await redis_service.max_otp_Key(email))
+     
+     if(maxOtp >= 3){
+        await redis_service.setValue({
+          key: await redis_service.block_otp_Key(email),
+          value : "1",
+          ttl : 60 *2
+        })
+          throw new Error (`you have exceeded maximum number `,{cause:400})
+     }
+    const user = await dbService.findOne({ 
+      model : userModel,
+      filter: {email , isConfirmed : {$exists:  confirmed}}
+     })
 
+    if(!user){
+       throw new Error ("email already exist or already confirmed ",{cause:409})
+    }
+
+    const otp =  await generate_otp();
+    const otpHash = Hash(`${otp}`)
+    const sendemail = await sendEmail({
+        to: email,
+      subject:`verify your email`,
+       html : otpEmailTemplate( otp),
+    })
+      if(!sendemail){
+       throw new Error("failed to send verification to email", {cause : 500})
+    }
+
+    await redis_service.setValue({
+      key: await redis_service.otpKey(email),
+      value : otpHash,
+      ttl : 60
+    })
+
+    await redis_service.incr(email)
+}
+// ==================== signUp =======================================
 export const signUp = async(req , res)=>{
   
      const {fName,lName, email, password,age,gender, role, phone} = req.body;
@@ -40,13 +91,15 @@ export const signUp = async(req , res)=>{
          arr_path.push(file.path)
        }
     }
-
+  
     const otp = await generate_otp();
-    const otpHash = await Hash(`${otp}`)
-    const sendemail = await sendEmail({
-      to: email,
-      subject:`verify your email`,
-       html :`<h1>verify your email</h1><p>YOUR OTP is ${otp}<p>`,
+    const otpHash = Hash(`${otp}`)
+
+     eventEmitter.emit(event_names.confirmEmail,async()=>{
+      const sendemail = await sendEmail({
+         to: email,
+         subject:`verify your email`,
+         html : otpEmailTemplate(otp),
     // attachments:[
     //     {
     //         filename:"image.jpg",
@@ -58,17 +111,17 @@ export const signUp = async(req , res)=>{
     if(!sendemail){
        throw new Error("failed to send verification to email", {cause : 500})
     }
-
+     })
      await redis_service.setValue({
       key: await redis_service.otpKey(email),
       value: otpHash,
-      ttl:60
+      ttl:60 *2
      })
 
    await redis_service.setValue({
     key:await redis_service.max_otp_Key(email),
     value : 1,
-    ttl : 60 
+    ttl : 60  * 6
    })
 
 const user = await dbService.create({
@@ -89,8 +142,7 @@ const user = await dbService.create({
         },
     })
 
-//  res.status(201).json({message:"done",user})
-  
+   
     accessRespose({res,status:201, data : user})
    } 
 
@@ -108,12 +160,12 @@ const user = await dbService.create({
      }
     const user = await dbService.findOneAndUpdate({ 
       model : userModel,
-      filter: {email , isConfirmed : false},
+      filter: {email , isConfirmed: { $exists: false }},
       update:{isConfirmed : true}
      })
 
     if(! user){
-       throw new Error ("email already exists or already confirmed ",{cause:409})
+       throw new Error ("Invalid email or email already confirmed",{cause:409})
     }
    await redis_service.delate(await redis_service.otpKey(email))
 
@@ -124,77 +176,23 @@ const user = await dbService.create({
  export const   resendOTP = async(req , res)=>{
 
      const { email} = req.body;
-    
-      const isBlocked = await redis_service.ttl( await redis_service.block_otp_Key(email))
-      if(isBlocked > 0){
-          throw new Error (`you  blocked and you can resend OTP after ${isBlocked} seconds `,{cause:400})
-      }
-
-     const otpTTL = await redis_service.ttl(await redis_service.otpKey(email))
-     if(otpTTL >0){
-       throw new Error (`you can resend otp after ${otpTTL}`,{cause:400})
-     }
-
-    console.log({otpTTL});
-     
-     const maxOtp = await redis_service.getValue(await redis_service.max_otp_Key(email))
-     
-     if(maxOtp >= 3){
-        await redis_service.setValue({
-          key: await redis_service.block_otp_Key(email),
-          value : "1",
-          ttl : 60 *2
-        })
-          throw new Error (`you have exceeded maximum number `,{cause:400})
-     }
-    const user = await dbService.findOne({ 
-      model : userModel,
-      filter: {email , isConfirmed : false},
-     })
-
-    if(! user){
-       throw new Error ("email already exist or already confirmed ",{cause:409})
-    }
-
-    const otp =  await generate_otp();
-    const otpHash = Hash(`${otp}`)
-    const sendemail = await sendEmail({
-        to: email,
-      subject:`verify your email`,
-       html :`<h1>verify your email</h1><p>YOUR OTP is ${otp}<p>`,
-    })
-      if(!sendemail){
-       throw new Error("failed to send verification to email", {cause : 500})
-    }
-
-    await redis_service.setValue({
-      key: await redis_service.otpKey(email),
-      value : otpHash,
-      ttl : 60
-    })
-
-    await redis_service.incr(email)
-
-    accessRespose({res,status:200, message:"Email confirmed successfully "})
+      await sentEmailOTP({email , confirmed : false})
+    accessRespose({res,status:200, message:"OTP Send successfully "})
    } 
 
  export const signUpwithGmail = async (req, res) => {
  
-  console.log("kkkkkkk")
-    const { idToken } = req.body;
-    console.log("ID TOKEN:", idToken);
-
+     const { idToken } = req.body;
+ 
     const client = new OAuth2Client();
 
     const ticket = await client.verifyIdToken({
       idToken,
-      audience:
-        "856044153472-hka0icclcrjrb8lnvsirr8fcjgeut6mo.apps.googleusercontent.com"
+      audience:AUDIENCE
     });
 
     const payload = ticket.getPayload();
-    console.log("PAYLOAD:", payload);
-
+ 
     const {email,email_verified,name,picture ,given_name} = payload;
 
     const emailExists = await dbService.findOne({ 
@@ -225,12 +223,11 @@ const user = await dbService.create({
         throw new Error("email exists in different providers", { cause : 409})
      }
 
-     console.log({  user });
-     
+      
 
      const access_token = jwt.generateToken({
       payload : { id : user._id},
-      secretKey:"yosra123",
+      secretKey:SECRETKEY,
       options: {expiresIn : "1h"}
      })
  
@@ -238,6 +235,7 @@ const user = await dbService.create({
 
    } 
 
+  // =======================  signIn =========================
 
  export const signIn = async(req,res,next)=>{
     const {email , password} = req.body;
@@ -259,16 +257,16 @@ const user = await dbService.create({
 
    const access_token = generateToken({
       payload: {id : user._id,extra : 250},
-      secretKey:"yosra123",
+      secretKey: SECRETKEY,
       options : {
         jwtid :idToken,
-        expiresIn: 2* 60
+        expiresIn: 5* 60
       }
   })
 
    const refresh_token = generateToken({
       payload: {id : user._id,extra : 250},
-      secretKey:"yosra@123",
+      secretKey:REFRESH_SECRETKEY,
       options : {
         jwtid :idToken,   
         expiresIn:"1y"}
@@ -341,6 +339,46 @@ export const updatePassword = async(req,res)=>{
 
 }
 
+// ================== forget Password ===========
+
+export const forget_Password = async(req,res)=>{
+    const { email} = req.body;
+
+    await sentEmailOTP({email , confirmed : true})
+
+         accessRespose({res,data : "OTP Send successfully "})
+
+}
+
+// ================== reset Password ===========
+
+export const reset_Password = async(req,res)=>{
+    const { email, code , password} = req.body;
+
+    const otpValue = await redis_service.getValue(await redis_service.otpKey(email))
+      if(!otpValue)   {
+          throw new Error("otp is expired ",{ cause:400})
+   }
+     if(!Compare(code , otpValue  )){
+         throw new Error("otp inValid",{ cause:400})
+     }
+
+     const user= await dbService.findOneAndUpdate({
+      model : userModel,
+      filter : {email , isConfirmed : {$exists : true}},
+      update : {
+         password : Hash(password)
+      }
+     })
+
+    if(!user){
+       throw new Error("user not exists  or  not confirmed")
+    }
+      await redis_service.delate(await redis_service.otpKey(email))
+         accessRespose({res,data : "OTP Send successfully "})
+
+}
+
 // ================== logout ===========
 
 export const logout = async(req,res)=>{
@@ -383,13 +421,12 @@ export const refreshToken = async(req , res)=>{
      
      const decode = verifyToken({
        token,
-       secretKey: "yosra@123"
+       secretKey: REFRESH_SECRETKEY
      });
        if(!decode?.id){
            throw new Error("invalid payload token",{cause : 400})
        }
-       console.log({decode});
-       const user =await userModel.findOne({_id : decode.id})
+        const user =await userModel.findOne({_id : decode.id})
      
        if(!user){
          return  res.status(409).json({message:"user not existe"})
@@ -397,7 +434,7 @@ export const refreshToken = async(req , res)=>{
 
          const access_token = generateToken({
    payload: {id : user._id,extra : 250},
-   secretKey:"yosra123",
+   secretKey:SECRETKEY,
    options : {expiresIn:"1h"}
   })
 

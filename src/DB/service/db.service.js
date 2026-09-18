@@ -18,6 +18,19 @@ export const findOne = async({model , filter = {} , option={}} ={})=>{
 
     return await doc.exec()
 }
+export const find = async({model , filter = {} , option={}} ={})=>{
+   const doc =  model.find(filter)
+
+    if(option.skip){
+       doc.skip(option.skip)
+       //option.skip  this is value ex : skip: 3
+    }
+     if(option.limit){
+       doc.limit(option.limit)
+    }
+
+    return await doc.exec()
+}
 
 export const findById = async({model , id , option = {}} ={})=>{
    return await model.findById(id).select(option.select || " ")

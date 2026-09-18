@@ -76,3 +76,11 @@ export const idSchema = {
      otp:joi.string().length(6).pattern(/^[0-9]{6}/).required()
    }).required()
  }
+
+  export const resetPasswordSchema ={
+   body:joi.object({
+     email:generalRules.email.required(),
+     code:joi.string().length(6).pattern(/^[0-9]{6}/).required(),
+     password:generalRules.password.required()
+   }).required()
+ }
