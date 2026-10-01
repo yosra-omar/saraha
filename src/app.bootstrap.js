@@ -58,14 +58,17 @@ const bootstrap= async()=>{
    app.use("/messages",messageRouter)
 
    
-    app.get("/all",(req,res)=>{
+    app.get("/",(req,res)=>{
         res.status(200).json({message:"Welcom to saraha my app......😀"})
     })
 
 
-app.use("{/demo}",(req,res)=>{
-        throw new Error(`URL ${req.originalUrl} and method ${req.method} not found `,{cause:404})
-})
+app.use((req, res) => {
+  throw new Error(
+    `URL ${req.originalUrl} and method ${req.method} not found`,
+    { cause: 404 }
+  );
+});
 
 
 
