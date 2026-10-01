@@ -49,7 +49,7 @@ const bootstrap= async()=>{
     express.json()
 )
 
-   checkConnectionDB()
+ await  checkConnectionDB()
  await  connectRedis()
 
    app.use("/:userId/message",messageRouter)
