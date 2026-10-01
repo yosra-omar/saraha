@@ -1,4 +1,4 @@
-import { accessRespose } from "../../common/utils/respose.js";
+import { accessResponse } from "../../common/utils/respose.js";
 import { messageModel } from "../../DB/models/message.model.js";
 import { userModel } from "../../DB/models/user.model.js";
 import * as dbService from "../../DB/service/db.service.js"
@@ -6,14 +6,15 @@ import * as dbService from "../../DB/service/db.service.js"
 
 
 
-// ====================  create_Message =======================================
-export const  create_Message = async(req , res)=>{
+// ====================  sendMessage =======================================
+export const  sendMessage = async(req , res)=>{
   
-     const { content, userId} = req.body;
+        const { receiverId } = req.params;
+     const { content} = req.body;
 
     const userExists = await dbService.findOne({ 
       model : userModel,
-      filter: { _id : userId}
+      filter: { _id : receiverId}
      })
    
      if(!userExists){
@@ -24,35 +25,40 @@ export const  create_Message = async(req , res)=>{
        model : messageModel,
       data : {
         content,
-        userId
+        receiverId,
+        senderId : req.user?._id || null
       }
      })
    
-    accessRespose({res,status:201, data :  message})
+    accessResponse({res,status:201, data :  message})
    } 
 
  
-// ====================  get_Message =======================================
-export const  get_Message = async(req , res)=>{
+// ====================  get_MessageById =======================================
+export const  get_MessageById = async(req , res)=>{
   
-     const { id} = req.params;
+     const { messageId} = req.params;
  
     const  message = await dbService.findOne({ 
       model : messageModel,
       filter: { 
-        _id :id,
-        userId :req.user.id
-      }
+        _id :messageId,
+        $or :[
+          {senderId : req.user.id},
+          {receiverId :req.user.id}
+        ]
+      },
+      select: "-senderId"
      })
  
      if(!message){
-        throw new Error("user not exists or not authorized", {cause : 404})
+        throw new Error("Message not found or unauthorized", {cause : 404})
      }
-    accessRespose({res,status:201, data :  message})
+    accessResponse({res,status:201, data :  message})
    } 
 
-// ====================  get_Messages =======================================
-export const  get_Messages = async(req , res)=>{
+// ====================  getAllMessages =======================================
+export const  getAllMessages = async(req , res)=>{
   
     const  message = await dbService.find({ 
       model : messageModel,
@@ -61,18 +67,95 @@ export const  get_Messages = async(req , res)=>{
       }
      })
   
-    accessRespose({res,status:200, data :  message})
+    accessResponse({res,status:200, data :  message})
    } 
 
-// ====================  get_MessagesByadmin =======================================
-export const  get_MessagesByadmin = async(req , res)=>{
-  const {userId} = req.params
-    const  message = await dbService.find({ 
-      model : messageModel,
-      filter: { 
-        userId 
+// =================== Delete Message ====================
+export const deleteMessage = async(req,res)=>{
+         const { messageId} = req.params;
+
+      const messageExist = await dbService.findById({
+        model : messageModel,
+        _id : messageId
+      })
+
+      if(!messageExist){
+            throw new Error("Message not found or unauthorized", {cause : 404})
       }
-     })
-  
-    accessRespose({res,status:200, data :  message})
-   } 
+      const message = await dbService.deleteOne({
+        model : messageModel,
+        filter : {
+            _id :messageId ,
+            $or:[
+                { senderId:req.user._id},
+                { receiverId:req.user._id},
+        ]
+        },
+
+      })
+
+      accessRespose({
+        res,
+        status: 200,
+        data: message
+    });
+}
+//=========================== toggleFavourite ==============
+export const toggleFavourite = async (req, res) => {
+   const {messageId} = req.params;
+   
+     const message = await dbService.findOne({
+        model : messageModel,
+        filter:{
+          _id :messageId,
+          receiverId:req.user._id
+        }
+      })
+
+      if(!message){
+            throw new Error("Message not found or unauthorized", {cause : 404})
+      }
+    
+    message.isFavourite = !message.isFavourite
+        await message.save();
+
+         accessRespose({
+        res,
+        status: 200,
+        data: message
+    });
+
+}
+
+// ======================= getFavouriteMessages ===================
+export const getFavouriteMessages = async (req, res) => {
+    const message = await dbService.find({
+      model : messageModel,
+      filter:{
+        receiverId: req.user._id,
+        isFavourite :true
+      }
+    })
+       accessRespose({
+        res,
+        status: 200,
+        data: messages
+    });
+}
+
+// ======================= deleteAllMessages ===================
+export const deleteAllMessages = async (req, res) => {
+
+    const messages = await dbService.deleteMany({
+        model: messageModel,
+        filter: {
+            receiverId: req.user._id
+        }
+    });
+
+    accessRespose({
+        res,
+        status: 200,
+        data: messages
+    });
+};

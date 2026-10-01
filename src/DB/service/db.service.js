@@ -43,3 +43,7 @@ export const findOneAndUpdate = async({model , filter = {}, update = {}, option 
       runValidators : true
    } )
 }
+
+export const  deleteOne = async({model , filter , option = {}} ={})=>{
+   return await model.deleteOne(filter)
+}

@@ -1,7 +1,6 @@
 import multer from "multer";
 import fs from "node:fs";
-// path from "node:path";
-
+ 
 export const multerLocal = (
   {
   customPath = "general",
@@ -36,4 +35,5 @@ export const multerLocal = (
   const upload = multer({storage , fileFilter})
   return upload;
 }
+
 

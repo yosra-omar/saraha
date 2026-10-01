@@ -1,6 +1,6 @@
 
 
-export const accessRespose = ({
+export const accessResponse = ({
      res,
      status = 200,
      message= "done",

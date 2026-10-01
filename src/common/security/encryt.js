@@ -1,8 +1,8 @@
 import crypto from "crypto"
-import { ENCRYPTION_KEY } from "../../../config/config.service.js";
+import { ENCRYPTION_KEY as key } from "../../../config/config.service.js";
 
 // 🔑 Use 32 bytes (256 bits) for AES-256
-const encryptionKey = Buffer.from(ENCRYPTION_KEY,"utf8"); 
+const encryptionKey = Buffer.from(key,"utf8"); 
 const IV_LENGTH = 16; 
 
 export function encrypt(text) {

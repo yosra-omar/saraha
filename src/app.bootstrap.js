@@ -21,7 +21,7 @@ const bootstrap= async()=>{
 
    const limiter = rateLimit({
       windowMs : 60*2*1000,
-      limit :3,
+      limit :5,
       message:"Game over",
       statusCode:400,
       handler:(req,res,next)=>{
@@ -82,7 +82,7 @@ app.use((err,req,res,next)=>{
 
 
     app.listen(port,()=>{
-        console.log(`server runing in port ${port}`)
+        console.log(`server runing in port ${port}🚀🚀`)
     })
 }
 

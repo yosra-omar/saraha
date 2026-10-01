@@ -40,7 +40,8 @@ const userSchema = new mongoose.Schema({
         default:userGender.female
     },
     profilePic:{
-       type:String,
+       secure_url:String,
+       public_id :String
     },
     provider:{
         type:String,
@@ -54,6 +55,7 @@ const userSchema = new mongoose.Schema({
     },
     isConfirmed:{
         type:Boolean,
+        default:true
      },
     coverImages:[String],
     changeCredential : Date

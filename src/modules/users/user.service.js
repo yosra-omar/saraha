@@ -3,26 +3,19 @@ import { userModel } from "../../DB/models/user.model.js";
 import * as dbService from "../../DB/service/db.service.js"
 import jwt from "jsonwebtoken"
  import { generateToken, verifyToken } from "../../common/utils/token.js";
-import { accessRespose } from "../../common/utils/respose.js";
+import { accessResponse } from "../../common/utils/respose.js";
 import { decrypt, encrypt } from "../../common/security/encryt.js";
 import { Compare, Hash } from "../../common/security/hash.js";
  import { OAuth2Client } from "google-auth-library";
 import { randomUUID } from "crypto";
-import { revokeTokenModel } from "../../DB/models/revokToken.model.js";
-import * as redis_service from "../../DB/service/redis.service.js";
+ import * as redis_service from "../../DB/service/redis.service.js";
 import { generate_otp, sendEmail } from "../../common/service/send_email.js";
 import { eventEmitter,event_names } from "../../common/utils/events/send_email.event.js";
 import { otpEmailTemplate } from "../../common/utils/email.templete.js";
-import { AUDIENCE, REFRESH_SECRETKEY, SECRETKEY } from "../../../config/config.service.js";
- //====================== this is old way in vertion 4 ==========
-// const asyncHandler = (fn)=>{
-//     return(req,res,next)=>{
-//       fn(req,res,next) .catch((error)=>{
-//           // res.status(500).json({message:"server error ",error})
-//           next(error)
-//       })
-//     }
-// }
+import { APPLICATION_APP, AUDIENCE, REFRESH_SECRETKEY, SECRETKEY } from "../../../config/config.service.js";
+import {  deleteResurces, destroyImage, uploadFiles, uploadImage } from "../../common/utils/multer/cloudinary.js";
+ 
+
 const sentEmailOTP = async({email , confirmed })=>{
      const isBlocked = await redis_service.ttl( await redis_service.block_otp_Key(email))
       if(isBlocked > 0){
@@ -91,7 +84,13 @@ export const signUp = async(req , res)=>{
          arr_path.push(file.path)
        }
     }
-  
+    const imageId = randomUUID();
+
+       const { secure_url, public_id } = await uploadImage({
+          file: req.file,
+          path: `user/${imageId}`
+});
+
     const otp = await generate_otp();
     const otpHash = Hash(`${otp}`)
 
@@ -135,15 +134,15 @@ const user = await dbService.create({
            gender,
           password :Hash(password) ,
           phone:phone ? encrypt(phone): null,
-          profilePic: req?.files? req.files.path : null,
-            //profilePic: req?.files?.attachment.length>0? req.files.attachment[0].path : null,
-
+          profilePic: {secure_url,public_id},
+          //profilePic: req?.files? req.files.path : null,
+         //profilePic: req?.files?.attachment.length>0? req.files.attachment[0].path : null,
           coverImages: arr_path
         },
     })
+      
 
-   
-    accessRespose({res,status:201, data : user})
+    accessResponse({res,status:201, data : user})
    } 
 
 // ======================= confirmEmail =========================
@@ -169,7 +168,7 @@ const user = await dbService.create({
     }
    await redis_service.delate(await redis_service.otpKey(email))
 
-    accessRespose({res,status:200, message:"Email confirmed successfully "})
+    accessResponse({res,status:200, message:"Email confirmed successfully "})
    } 
 
   // =======================  resendOTP =========================
@@ -177,9 +176,10 @@ const user = await dbService.create({
 
      const { email} = req.body;
       await sentEmailOTP({email , confirmed : false})
-    accessRespose({res,status:200, message:"OTP Send successfully "})
+    accessResponse({res,status:200, message:"OTP Send successfully "})
    } 
 
+  // =======================  signUpwithGmail  =========================
  export const signUpwithGmail = async (req, res) => {
  
      const { idToken } = req.body;
@@ -231,7 +231,7 @@ const user = await dbService.create({
       options: {expiresIn : "1h"}
      })
  
-         accessRespose({res , data : access_token})
+         accessResponse({res , data : access_token})
 
    } 
 
@@ -260,7 +260,7 @@ const user = await dbService.create({
       secretKey: SECRETKEY,
       options : {
         jwtid :idToken,
-        expiresIn: 5* 60
+        expiresIn: 10* 60
       }
   })
 
@@ -272,7 +272,7 @@ const user = await dbService.create({
         expiresIn:"1y"}
   })
 
-    accessRespose({res , data : {access_token, refresh_token}})
+    accessResponse({res , data : {access_token, refresh_token}})
 
 
 
@@ -280,7 +280,7 @@ const user = await dbService.create({
  //============= get profile ===========================
 export const getProfile = async(req , res)=>{
       const user = req.user
-     accessRespose({res , data :{ user: {...user._doc ,phone: decrypt(user.phone)} } })
+     accessResponse({res , data :{ user: {...user._doc ,phone: decrypt(user.phone)} } })
 }
 
 // ================= share profile ===================
@@ -297,7 +297,7 @@ export const shareProfile = async(req,res)=>{
     throw new Error ("user not exist", { cause : 404})
   }
    let phone = decrypt(user.phone)
-  accessRespose({res,data : {...user._doc, phone}})
+  accessResponse({res,data : {...user._doc, phone}})
 }
  // ====================== update Profile ===============
 export const updateProfile = async(req,res)=>{
@@ -317,7 +317,7 @@ export const updateProfile = async(req,res)=>{
         update: updateQuery
       })
 
-     accessRespose({res,data : user})
+     accessResponse({res,data : user})
 
 }
 
@@ -335,10 +335,73 @@ export const updatePassword = async(req,res)=>{
       update : {password : Hash(newPassword)}
     })
 
-         accessRespose({res,data : user})
+         accessResponse({res,data : user})
 
 }
 
+// ==================  updateProfileImage ===========
+export const updateProfileImage = async (req, res) => {
+    if (!req.file) {
+      throw new Error("Profile image is required", { cause: 400 });
+    }
+    const  {secure_url , public_id} = await uploadImage({file :req.file , path :`user/${req.user._id}`})
+   
+        const user = await dbService.findOneAndUpdate({
+          model : userModel,
+         filter: {
+          _id :req.user._id
+        },
+         update: {
+            profilePic: {secure_url , public_id}
+          },
+         option: {
+            new:false,
+          }
+      })
+
+          if(user?.profilePic?.public_id){
+             await destroyImage({public_id : user.profilePic.public_id})
+          }
+
+          accessResponse({
+          res,
+          message: "Profile image updated successfully",
+          data :user
+        })
+};
+
+// ==================  profileCoverImage ===========
+export const profileCoverImage = async (req, res) => {
+    if (!req.files) {
+      throw new Error("files is required", { cause: 400 });
+    }
+    const  attachments = await uploadFiles({file :req.files , path :`user/${req.user._id}/cover`})
+   
+        const user = await dbService.findOneAndUpdate({
+          model : userModel,
+         filter: {
+          _id :req.user._id
+        },
+         update: {
+             coverImages: attachments
+          },
+         option: {
+            new:false,
+          }
+      })
+
+          if(user?.coverImages?.length){
+             await  deleteResurces({
+              public_ids : user.coverImages.map((ele)=>ele.public_id)
+            })
+          }
+
+          accessResponse({
+          res,
+          message: "Profile image updated successfully",
+          data :user
+        })
+};
 // ================== forget Password ===========
 
 export const forget_Password = async(req,res)=>{
@@ -346,7 +409,7 @@ export const forget_Password = async(req,res)=>{
 
     await sentEmailOTP({email , confirmed : true})
 
-         accessRespose({res,data : "OTP Send successfully "})
+         accessResponse({res,data : "OTP Send successfully "})
 
 }
 
@@ -375,7 +438,7 @@ export const reset_Password = async(req,res)=>{
        throw new Error("user not exists  or  not confirmed")
     }
       await redis_service.delate(await redis_service.otpKey(email))
-         accessRespose({res,data : "OTP Send successfully "})
+         accessResponse({res,data : "OTP Send successfully "})
 
 }
 
@@ -404,7 +467,7 @@ export const logout = async(req,res)=>{
     // })
   }
   
-         accessRespose({res, message:flag == "all" ?
+         accessResponse({res, message:flag == "all" ?
            "you are logout from all devices successfully" :
             "you are logout for this device "
           })
@@ -439,5 +502,5 @@ export const refreshToken = async(req , res)=>{
   })
 
   
-     accessRespose({res , data : access_token})
+     accessResponse({res , data : access_token})
 }

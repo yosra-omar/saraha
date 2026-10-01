@@ -8,9 +8,12 @@ const messageRouter = Router({
     mergeParams: true
 })
 
-messageRouter.post("/create",validation(MV.createMessageSchema), MS.create_Message)
-// messageRouter.get("/:id",authentication, MS.get_Message )
-// messageRouter.get("/",authentication, MS.get_Messages )
-messageRouter.get("/:userId", MS.get_MessagesByadmin )
+messageRouter.post("/:receiverId",validation(MV.createMessageSchema), MS.sendMessage)
+messageRouter.get("/:messageId",authentication,validation(MV.MessageIdSchema), MS.get_MessageById )
+messageRouter.get("/",authentication, MS.getAllMessages )
+messageRouter.delete("/:messageId",authentication,validation(MV.MessageIdSchema), MS.deleteMessage )
+messageRouter.patch("/favourite/:messageId",authentication,validation(MV.MessageIdSchema), MS.toggleFavourite)
+messageRouter.get("/favourite",authentication,MS.getFavouriteMessages)
+messageRouter.delete("/",authentication, MS.deleteAllMessages )
 
 export default messageRouter

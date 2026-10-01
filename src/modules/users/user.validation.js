@@ -27,7 +27,7 @@ import { generalRules } from "../../common/utils/generalRules.js"
    files :joi.object({
      attachment :joi.array().items( generalRules.file.required()).length(1).required(),
      attachments : joi.array().items(generalRules.file.required()).max(3).required()
-   }).required()
+   })
  }
 
 export const signInSchema ={

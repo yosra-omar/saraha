@@ -21,4 +21,8 @@ export const REDIS_URL = process.env.REDIS_URL
 export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY
 export const USER_EMAIL = process.env.USER_EMAIL
 export const PASSWORD = process.env.PASSWORD
+export const CLOUD_NAME = process.env.CLOUD_NAME
+export const API_KEY = process.env.API_KEY
+export const API_SECRET = process.env.API_SECRET
+export const APPLICATION_APP = process.env.APPLICATION_APP
 
