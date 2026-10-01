@@ -1,10 +1,8 @@
 
 import express from "express";
-import { checkConnectionDB } from "./DB/connectionDB.js";
 import userRouter from "./modules/users/user.controller.js";
 import cors from "cors"
 import * as redisService from "./DB/service/redis.service.js";
-import { connectRedis } from "./DB/redis.connection.js";
 import messageRouter from "./modules/messages/message.controller.js";
 import { rateLimit } from 'express-rate-limit'
 import helmet from "helmet";
@@ -13,9 +11,6 @@ import { PORT } from "../config/config.service.js";
 const app = express();
 const port = PORT;
 
-
-
-const bootstrap= async()=>{
   
    app.set("case sensitive routing", true)
 
@@ -48,10 +43,7 @@ const bootstrap= async()=>{
     limiter,
     express.json()
 )
-
- await  checkConnectionDB()
- await  connectRedis()
-
+ 
    app.use("/:userId/message",messageRouter)
    
    app.use("/users",userRouter)
@@ -83,11 +75,8 @@ app.use((err,req,res,next)=>{
     })
 })
 
-
-    app.listen(port,()=>{
-        console.log(`server runing in port ${port}🚀🚀`)
-    })
-}
+ 
 
 
-export default bootstrap
+
+export default app
